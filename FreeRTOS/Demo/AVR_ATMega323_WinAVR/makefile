@@ -99,7 +99,7 @@ EXTRAINCDIRS =
 #  -Wa,...:   tell GCC to pass this to the assembler.
 #    -ahlms:  create assembler listing
 
-DEBUG_LEVEL=-g
+DEBUG_LEVEL=-ggdb
 WARNINGS=-Wall -Wextra -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-align -Wsign-compare \
 		-Waggregate-return -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wunused
 
@@ -117,7 +117,7 @@ $(patsubst %,-I%,$(EXTRAINCDIRS))
 #CFLAGS += -std=c89
 #CFLAGS += -std=gnu89
 #CFLAGS += -std=c99
-CFLAGS += -std=gnu99
+CFLAGS += -std=gnu11 -flto
 
 
 
@@ -136,7 +136,7 @@ ASFLAGS = -Wa,-adhlns=$(<:.S=.lst),-gstabs
 #  -Wl,...:   tell GCC to pass this to linker.
 #  -Map:      create map file
 #  --cref:    add cross reference to  map file
-LDFLAGS = -Wl,-Map=$(TARGET).map,--cref
+LDFLAGS = -Wl,-Map=$(TARGET).map,--cref $(CFLAGS)
 
 
 

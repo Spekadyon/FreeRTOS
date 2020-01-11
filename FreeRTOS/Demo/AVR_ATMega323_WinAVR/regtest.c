@@ -40,7 +40,7 @@ static void prvRegisterCheck1( void *pvParameters );
 static void prvRegisterCheck2( void *pvParameters );
 
 /* Set to a non zero value should an error be found. */
-portBASE_TYPE xRegTestError = pdFALSE;
+portBASE_TYPE xRegTestError __attribute__ ((externally_visible)) = pdFALSE;
 
 /*-----------------------------------------------------------*/
 
