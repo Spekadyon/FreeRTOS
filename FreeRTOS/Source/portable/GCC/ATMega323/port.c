@@ -45,13 +45,13 @@ Changes from V2.6.0
  *----------------------------------------------------------*/
 
 /* Start tasks with interrupts enables. */
-#define portFLAGS_INT_ENABLED					( ( StackType_t ) 0x80 )
+//#define portFLAGS_INT_ENABLED					( ( StackType_t ) 0x80 )
 
 /* Hardware constants for timer 1. */
-#define portCLEAR_COUNTER_ON_MATCH				( ( uint8_t ) 0x08 )
-#define portPRESCALE_64							( ( uint8_t ) 0x03 )
+//#define portCLEAR_COUNTER_ON_MATCH				( ( uint8_t ) 0x08 )
+//#define portPRESCALE_64							( ( uint8_t ) 0x03 )
 #define portCLOCK_PRESCALER						( ( uint32_t ) 64 )
-#define portCOMPARE_MATCH_A_INTERRUPT_ENABLE	( ( uint8_t ) 0x10 )
+//#define portCOMPARE_MATCH_A_INTERRUPT_ENABLE	( ( uint8_t ) 0x10 )
 
 /*-----------------------------------------------------------*/
 
@@ -217,7 +217,7 @@ uint16_t usAddress;
 	the stack use is minimal should a context switch interrupt occur. */
 	*pxTopOfStack = ( StackType_t ) 0x00;	/* R0 */
 	pxTopOfStack--;
-	*pxTopOfStack = portFLAGS_INT_ENABLED;
+	*pxTopOfStack = _BV(SREG_I); // SREG global interrupt flag
 	pxTopOfStack--;
 
 
@@ -362,7 +362,6 @@ void vPortYieldFromTick( void )
 static void prvSetupTimerInterrupt( void )
 {
 uint32_t ulCompareMatch;
-uint8_t ucHighByte, ucLowByte;
 
 	/* Using 16bit timer 1 to generate the tick.  Correct fuses must be
 	selected for the configCPU_CLOCK_HZ clock. */
@@ -377,21 +376,16 @@ uint8_t ucHighByte, ucLowByte;
 
 	/* Setup compare match value for compare match A.  Interrupts are disabled 
 	before this is called so we need not worry here. */
-	ucLowByte = ( uint8_t ) ( ulCompareMatch & ( uint32_t ) 0xff );
-	ulCompareMatch >>= 8;
-	ucHighByte = ( uint8_t ) ( ulCompareMatch & ( uint32_t ) 0xff );
-	OCR1AH = ucHighByte;
-	OCR1AL = ucLowByte;
+	OCR1A = (uint16_t)ulCompareMatch;
 
 	/* Setup clock source and compare match behaviour. */
-	ucLowByte = portCLEAR_COUNTER_ON_MATCH | portPRESCALE_64;
-	TCCR1B = ucLowByte;
+	/* Clear timer on match (CTC), top = OCR1A */
+	/* Prescaler == 64 */
+	TCCR1B = _BV(WGM12) | _BV(CS10) | _BV(CS11);
 
 	/* Enable the interrupt - this is okay as interrupt are currently globally
 	disabled. */
-	ucLowByte = TIMSK;
-	ucLowByte |= portCOMPARE_MATCH_A_INTERRUPT_ENABLE;
-	TIMSK = ucLowByte;
+	TIMSK1 |= _BV(OCIE1A);
 }
 /*-----------------------------------------------------------*/
 

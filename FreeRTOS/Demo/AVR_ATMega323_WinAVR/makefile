@@ -31,7 +31,10 @@
 
 
 # MCU name
-MCU = atmega323
+MCU = atmega328p
+
+# CPU FREQUENCY
+F_CPU = 8000000
 
 # Output format. (can be srec, ihex, binary)
 FORMAT = ihex
@@ -103,7 +106,7 @@ DEBUG_LEVEL=-ggdb
 WARNINGS=-Wall -Wextra -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-align -Wsign-compare \
 		-Waggregate-return -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wunused
 
-CFLAGS = -D GCC_MEGA_AVR -I. -I../../Source/include -I../Common/include  \
+CFLAGS = -D GCC_MEGA_AVR -I. -I../../Source/include -I../Common/include -DF_CPU=$(F_CPU) \
 $(DEBUG_LEVEL) -O$(OPT) \
 -fsigned-char -funsigned-bitfields -fpack-struct -fshort-enums \
 $(WARNINGS) \

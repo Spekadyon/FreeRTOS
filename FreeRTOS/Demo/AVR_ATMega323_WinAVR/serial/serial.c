@@ -57,43 +57,40 @@ Changes from V2.6.0
 
 #define serBAUD_DIV_CONSTANT			( ( unsigned long ) 16 )
 
-/* Constants for writing to UCSRB. */
-#define serRX_INT_ENABLE				( ( unsigned char ) 0x80 )
-#define serRX_ENABLE					( ( unsigned char ) 0x10 )
-#define serTX_ENABLE					( ( unsigned char ) 0x08 )
-#define serTX_INT_ENABLE				( ( unsigned char ) 0x20 )
-
-/* Constants for writing to UCSRC. */
-#define serUCSRC_SELECT					( ( unsigned char ) 0x80 )
-#define serEIGHT_DATA_BITS				( ( unsigned char ) 0x06 )
+#define BAUD_TOL	2UL
 
 static QueueHandle_t xRxedChars; 
 static QueueHandle_t xCharsForTx; 
 
 #define vInterruptOn()										\
 {															\
-	unsigned char ucByte;								\
-															\
-	ucByte = UCSRB;											\
-	ucByte |= serTX_INT_ENABLE;								\
-	UCSRB = ucByte;											\
+	UCSR0B |= _BV(TXEN0);									\
 }																				
 /*-----------------------------------------------------------*/
 
 #define vInterruptOff()										\
 {															\
-	unsigned char ucInByte;								\
-															\
-	ucInByte = UCSRB;										\
-	ucInByte &= ~serTX_INT_ENABLE;							\
-	UCSRB = ucInByte;										\
+	UCSR0B &= (uint8_t)~_BV(TXEN0);							\
 }
 /*-----------------------------------------------------------*/
 
 xComPortHandle xSerialPortInitMinimal( unsigned long ulWantedBaud, unsigned portBASE_TYPE uxQueueLength )
 {
-unsigned long ulBaudRateCounter;
-unsigned char ucByte;
+	/* Perform USE_2X calculations (from util/setbaud.h) at run time */
+	uint32_t ubrr_value;
+	uint8_t use_2x;
+	ubrr_value = ((F_CPU) + 8UL * (ulWantedBaud)) / (16UL * (ulWantedBaud)) - 1UL;
+	/* use 2x */
+	if ( 100UL * F_CPU > (16UL * ((ubrr_value) + 1UL)) * (100UL * (ulWantedBaud) + (ulWantedBaud) * (BAUD_TOL))) {
+		use_2x = 1;
+	} else if (100UL * F_CPU < (16UL * ((ubrr_value) + 1UL)) * (100UL * (ulWantedBaud) - (ulWantedBaud) * (BAUD_TOL))) {
+		use_2x = 1;
+	} else {
+		use_2x = 0;
+	}
+	if (use_2x) {
+		ubrr_value = ((F_CPU) + 4UL * (ulWantedBaud)) / (8UL * (ulWantedBaud)) -1UL;
+	}
 
 	portENTER_CRITICAL();
 	{
@@ -101,24 +98,20 @@ unsigned char ucByte;
 		xRxedChars = xQueueCreate( uxQueueLength, ( unsigned portBASE_TYPE ) sizeof( signed char ) );
 		xCharsForTx = xQueueCreate( uxQueueLength, ( unsigned portBASE_TYPE ) sizeof( signed char ) );
 
-		/* Calculate the baud rate register value from the equation in the
-		data sheet. */
-		ulBaudRateCounter = ( configCPU_CLOCK_HZ / ( serBAUD_DIV_CONSTANT * ulWantedBaud ) ) - ( unsigned long ) 1;
+		/* Set baud rate */
+		UBRR0H = (ubrr_value >> 8) & 0xFF;
+		UBRR0L = ubrr_value & 0xFF;
+		if (use_2x) {
+			UCSR0A |= _BV(U2X0);
+		} else {
+			UCSR0A &= (uint8_t)~_BV(U2X0);
+		}
 
-		/* Set the baud rate. */	
-		ucByte = ( unsigned char ) ( ulBaudRateCounter & ( unsigned long ) 0xff );	
-		UBRRL = ucByte;
+		/* Enable Rx interrupt and Rx/Tx + data bits to 8 */
+		UCSR0B = _BV(RXCIE0) | _BV(RXEN0) | _BV(TXEN0);
 
-		ulBaudRateCounter >>= ( unsigned long ) 8;
-		ucByte = ( unsigned char ) ( ulBaudRateCounter & ( unsigned long ) 0xff );	
-		UBRRH = ucByte;
-
-		/* Enable the Rx interrupt.  The Tx interrupt will get enabled
-		later. Also enable the Rx and Tx. */
-		UCSRB = ( serRX_INT_ENABLE | serRX_ENABLE | serTX_ENABLE );
-
-		/* Set the data bits to 8. */
-		UCSRC = ( serUCSRC_SELECT | serEIGHT_DATA_BITS );
+		/* Set data bits to 8 */
+		UCSR0C = _BV(UCSZ01) | _BV(UCSZ00);
 	}
 	portEXIT_CRITICAL();
 	
@@ -164,28 +157,21 @@ signed portBASE_TYPE xSerialPutChar( xComPortHandle pxPort, signed char cOutChar
 }
 /*-----------------------------------------------------------*/
 
-void vSerialClose( xComPortHandle xPort )
+void vSerialClose( xComPortHandle xPort __attribute__ ((unused)))
 {
-unsigned char ucByte;
-
-	/* The parameter is not used. */
-	( void ) xPort;
-
 	/* Turn off the interrupts.  We may also want to delete the queues and/or
 	re-install the original ISR. */
 
 	portENTER_CRITICAL();
 	{
 		vInterruptOff();
-		ucByte = UCSRB;
-		ucByte &= ~serRX_INT_ENABLE;
-		UCSRB = ucByte;
+		UCSR0B &= (uint8_t)~_BV(RXEN0);
 	}
 	portEXIT_CRITICAL();
 }
 /*-----------------------------------------------------------*/
 
-SIGNAL( USART_RXC_vect )
+ISR( USART_RX_vect )
 {
 signed char cChar;
 signed portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
@@ -193,7 +179,7 @@ signed portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
 	/* Get the character and post it on the queue of Rxed characters.
 	If the post causes a task to wake force a context switch as the woken task
 	may have a higher priority than the task we have interrupted. */
-	cChar = UDR;
+	cChar = UDR0;
 
 	xQueueSendFromISR( xRxedChars, &cChar, &xHigherPriorityTaskWoken );
 
@@ -204,14 +190,14 @@ signed portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
 }
 /*-----------------------------------------------------------*/
 
-SIGNAL( USART_UDRE_vect )
+ISR( USART_UDRE_vect )
 {
 signed char cChar, cTaskWoken;
 
 	if( xQueueReceiveFromISR( xCharsForTx, &cChar, &cTaskWoken ) == pdTRUE )
 	{
 		/* Send the next character queued for Tx. */
-		UDR = cChar;
+		UDR0 = cChar;
 	}
 	else
 	{
