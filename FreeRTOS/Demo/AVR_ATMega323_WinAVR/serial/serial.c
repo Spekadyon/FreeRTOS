@@ -64,13 +64,13 @@ static QueueHandle_t xCharsForTx;
 
 #define vInterruptOn()										\
 {															\
-	UCSR0B |= _BV(TXEN0);									\
+	UCSR0B |= _BV(UDRIE0);									\
 }																				
 /*-----------------------------------------------------------*/
 
 #define vInterruptOff()										\
 {															\
-	UCSR0B &= (uint8_t)~_BV(TXEN0);							\
+	UCSR0B &= (uint8_t)~_BV(UDRIE0);							\
 }
 /*-----------------------------------------------------------*/
 
